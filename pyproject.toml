@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qcbb-labs"
+version = "0.1.0"
+description = "Quantum-classical branch and bound (QCBB) for low autocorrelation binary sequences (LABS)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.2",
+    "numba>=0.61",
+]
+
+[project.optional-dependencies]
+quantum = [
+    "qiskit>=2.0",
+    "qiskit-aer>=0.17",
+]
+ibm = [
+    "qiskit>=2.0",
+    "qiskit-aer>=0.17",
+    "qiskit-ibm-runtime>=0.52",
+]
+quantinuum = [
+    "qiskit>=2.0",
+    "qiskit-aer>=0.17",
+    "pytket>=2.18",
+    "pytket-qiskit>=0.79",
+    "pytket-quantinuum>=0.59",
+    "qnexus>=0.51",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[project.scripts]
+qcbb = "qcbb.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"qcbb.labs" = ["data/*.csv", "data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "D"]
+ignore = ["D105", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pytket.*", "qnexus.*"]
+follow_imports = "skip"
