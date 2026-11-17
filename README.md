@@ -112,11 +112,13 @@ docs/algorithm.md  the algorithm and its proofs
 
 ## Credits
 
+This is an independent implementation of the QCBB algorithm described in arXiv:2511.19501. It
+contains no code from the QCBB reference implementation for binary linear programs
+(https://github.com/david-sipos/qcbb, GPL-3.0).
+
 The fixed QAOA angles in `src/qcbb/labs/data/qaoa_parameters.json` come from QOKit
-(https://github.com/jpmorganchase/QOKit, Apache-2.0). The QCBB reference implementation for
-binary linear programs is at https://github.com/david-sipos/qcbb.
+(https://github.com/jpmorganchase/QOKit) and remain under QOKit's Apache-2.0 license.
 
 ## License
 
-Copyright (c) 2026 Bentax Plus. All rights reserved; the code is available on reasonable request
-for academic, non-commercial use. See [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Copyright (c) 2026 Bentax Plus.
