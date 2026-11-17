@@ -81,10 +81,12 @@ class SkewSampler:
     passed to the inner sampler unchanged.
 
     Args:
-        inner: Sampler that accepts any Hamiltonian (e.g. `QaoaSampler`).
-        max_size: Largest q restricted; no limit if None.
-        with_master: Also sample the master and merge both sample sets, so the
-            incumbent is never worse than without the restriction.
+        inner: Sampler of the restricted and the other Hamiltonians (e.g.
+            `QaoaSampler`).
+        max_size: Largest Hamiltonian the inner sampler takes; no limit if None.
+        with_master: Also sample the master, if it has at most `max_size` free
+            spins, and merge both sample sets, so the incumbent is never worse
+            than without the restriction.
     """
 
     def __init__(
@@ -114,16 +116,20 @@ class SkewSampler:
             i: s for i, h in enumerate(problems) if (s := self._restrict(h)) is not None
         }
         batch = [skews.get(i, h) for i, h in enumerate(problems)]
-        extra = [problems[i] for i in skews] if self.with_master else []
-        sets = self.inner.sample([*batch, *extra], shots, seed)
+        masters = [i for i in skews if self.with_master and self._fits(problems[i])]
+        sets = self.inner.sample([*batch, *(problems[i] for i in masters)], shots, seed)
         out = sets[: len(problems)]
-        for j, (i, skew) in enumerate(skews.items()):
+        extra = dict(zip(masters, sets[len(problems) :], strict=True))
+        for i, skew in skews.items():
             rows = [skew.complete(np.repeat(out[i].spins, out[i].counts, axis=0))]
-            if self.with_master:
-                m = sets[len(problems) + j]
-                rows.append(np.repeat(m.spins, m.counts, axis=0))
+            if i in extra:
+                rows.append(np.repeat(extra[i].spins, extra[i].counts, axis=0))
             out[i] = collect(problems[i], np.concatenate(rows))
         return out
+
+    def _fits(self, h: Hamiltonian) -> bool:
+        """Return True if h has at most `max_size` free spins."""
+        return self.max_size is None or h.size <= self.max_size
 
     def _restrict(self, h: Hamiltonian) -> SkewHamiltonian | None:
         """Return the skew restriction of an odd-length master, else None."""

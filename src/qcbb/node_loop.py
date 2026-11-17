@@ -7,7 +7,9 @@ Every node is evaluated in the same way:
 2. compute the node's lower bound and prune if it exceeds T;
 3. at a leaf (no free variable) the objective is exact: update UB;
 4. otherwise sample the node Hamiltonian with the run's sampler and offer the
-   best sample as an incumbent candidate;
+   best sample as an incumbent candidate; only the master may be larger than
+   the sampler takes, and it is then branched without samples, since its
+   children, the class roots, do not depend on samples;
 5. branch: the children of the master are the class roots, the children of
    every other node fix the variable chosen by the conflict values of the
    node's own samples (QCBB eqs. 5-9).
@@ -35,7 +37,7 @@ import numpy as np
 
 from qcbb.conflict import branching_variable, conflict_values
 from qcbb.problem import Problem, Spins
-from qcbb.sampler import Sampler, SampleSet
+from qcbb.sampler import Sampler, SampleSet, SizeError, collect
 
 INFINITY = 2**40
 """The threshold before the first incumbent: T = +inf."""
@@ -108,8 +110,9 @@ class Call:
 
     Attributes:
         size: Number of free variables F of the node Hamiltonian.
-        sampled: True if the sampler returned at least one sample (a
-            Hamiltonian larger than the backend takes returns none).
+        sampled: True if the sampler returned at least one sample (none if
+            error detection rejected every shot, or if the master was larger
+            than the sampler takes).
         seconds: Wall time of the call.
     """
 
@@ -221,13 +224,28 @@ class _Run:
         if not self.trace or (self.trace[-1].ub, self.trace[-1].lb) != (self.ub, lb):
             self.trace.append(Record(self.elapsed, self.ub, lb))
 
-    def sample(self, hamiltonian: Any) -> SampleSet:
-        """Sample one node Hamiltonian and record the call."""
+    def sample(self, hamiltonian: Any, master: bool) -> SampleSet:
+        """Sample one node Hamiltonian and record the call.
+
+        Args:
+            hamiltonian: The node Hamiltonian.
+            master: True for the master node, the only node that may be larger
+                than the sampler takes; it then gets no samples.
+
+        Raises:
+            SizeError: If a node other than the master is larger than the
+                sampler takes.
+        """
         seed = self.settings.seed
         if seed is not None:
             seed += len(self.calls)
         t = time.perf_counter()
-        samples = self.sampler.sample([hamiltonian], self.settings.shots, seed)[0]
+        try:
+            samples = self.sampler.sample([hamiltonian], self.settings.shots, seed)[0]
+        except SizeError:
+            if not master:
+                raise
+            samples = collect(hamiltonian, np.empty((0, hamiltonian.size), np.int8))
         seconds = time.perf_counter() - t
         self.calls.append(Call(hamiltonian.size, samples.spins.shape[0] > 0, seconds))
         return samples
@@ -256,7 +274,7 @@ class _Run:
             x = problem.complete(node, np.empty(0, dtype=np.int8))
             self.offer(x, problem.objective(x))
             return bound, []
-        samples = self.sample(problem.hamiltonian(node))
+        samples = self.sample(problem.hamiltonian(node), master=depth == 0)
         if samples.spins.shape[0]:
             self.offer(problem.complete(node, samples.spins[0]), samples.best)
         if bound > self.threshold:

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from helpers import node
 
-from qcbb import Hamiltonian, Settings, solve
+from qcbb import Hamiltonian, Settings, SizeError, solve
 from qcbb.labs import (
     LabsAngleSchedule,
     LabsProblem,
@@ -218,15 +218,17 @@ class Counting(Emulator):
         return super().run(jobs, shots, seed)
 
 
-def test_qaoa_sampler_skips_hamiltonians_larger_than_the_backend() -> None:
+def test_qaoa_sampler_rejects_hamiltonians_larger_than_the_backend() -> None:
     backend = Counting(max_size=9)
-    problems = [node(12, {}), node(12, dict.fromkeys(range(6), 1)), node(9, {})]
-    sets = QaoaSampler(LabsAngleSchedule(2), backend).sample(problems, shots=3, seed=0)
+    sampler = QaoaSampler(LabsAngleSchedule(2), backend)
+    problems = [node(12, dict.fromkeys(range(6), 1)), node(9, {})]
+    sets = sampler.sample(problems, shots=3, seed=0)
     assert backend.seen == [6, 9]
-    assert [s.spins.shape for s in sets] == [(0, 12), (3, 6), (3, 9)]
-    assert all(s.counts.sum() == 3 for s in sets[1:])
-    empty = QaoaSampler(LabsAngleSchedule(2), backend).sample([node(12, {})], 3, 0)
-    assert empty[0].spins.shape == (0, 12) and backend.seen == [6, 9]
+    assert [s.spins.shape[1] for s in sets] == [6, 9]
+    assert all(s.counts.sum() == 3 for s in sets)
+    with pytest.raises(SizeError):
+        sampler.sample([node(12, {}), node(9, {})], 3, 0)
+    assert backend.seen == [6, 9]
 
 
 def test_skew_restriction_has_zero_odd_autocorrelations() -> None:
@@ -278,3 +280,9 @@ def test_solve_with_qaoa_and_unsampled_master_proves_optimum() -> None:
         # the emulator counts the circuits and shots a quantum device would run
         assert backend.circuits == sum(c.sampled for c in r.calls)
         assert backend.shots == 100 * backend.circuits
+
+
+def test_solve_rejects_a_node_below_the_master_larger_than_the_backend() -> None:
+    sampler = QaoaSampler(LabsAngleSchedule(4), Emulator(max_size=10))
+    with pytest.raises(SizeError):
+        solve(LabsProblem(14, boundary=1), sampler, Settings(shots=100, seed=1))

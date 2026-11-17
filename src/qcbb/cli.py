@@ -9,10 +9,10 @@ backend: the exact noiseless emulation (`qaoa`), IBM Quantum (`ibm`) or
 Quantinuum (`quantinuum`). IBM devices named "fake_..." and Quantinuum
 without `--remote` are local noisy emulations; a real device runs only with
 `--submit`. One sampler serves every node of a run, with 1,000 shots per node
-by default; a Hamiltonian with more qubits than the backend takes is not
-sampled. For odd n the master is also sampled through its skew-symmetric
-restriction (`--no-skew` turns this off). `solve` prints the sampler time
-and the primal-dual integral of the run.
+by default; only the master may have more qubits than the backend takes,
+and it is then branched without samples. For odd n the master is also
+sampled through its skew-symmetric restriction (`--no-skew` turns this off).
+`solve` prints the sampler time and the primal-dual integral of the run.
 """
 
 import argparse

@@ -55,7 +55,7 @@ the open node N with the lowest key and evaluates it:
      the best sample becomes the incumbent if it beats UB;
   5. branching: the children of the master are the class roots (symmetry reduction, A.1); every
      other node branches on k* = argmax gamma over the candidate set, with gamma from the node's
-     own samples (eqs. 5-9; nu = 1 if the sampler returned none). Each child enters the queue
+     own samples (eqs. 5-9; nu = 1 if error detection rejected every shot). Each child enters the queue
      with key max(LB(N), LB(child)) unless that exceeds T.
 Before the first incumbent T is +infinity in effect. The loop ends when the lowest key exceeds T
 (UB is optimal) or at a node or time limit (UB with a certified gap).
@@ -253,8 +253,10 @@ master (the published rule), c = 0.875 at p = 1 and 0.625 at p >= 2 for node Ham
 c = 0.5 for the skew restriction (EMPIRICAL, Section 4.6). The depth is p = 12 or p = 1 on the
 simulator (4.8). One backend per run: every sampler call of a run goes to the same backend. A
 Hamiltonian with more qubits than the device takes (`backend.max_size`, 26 for the exact
-emulation) is not sampled: `QaoaSampler` returns an empty sample set for it, so that node offers
-no incumbent and uses nu = 1 (the QCBB rule for a node the quantum solver cannot take). For odd n
+emulation) raises `SizeError`. Only the master may be that large: its children, the class roots,
+do not depend on samples, so the node loop then branches it without samples. Every other node
+must fit, which holds for n <= 40 with 7 boundary spins (class roots have n - 14 free spins). For
+odd n
 the master is also sampled through its skew-symmetric restriction on (n + 1) / 2 qubits (B.12;
 on by default with QAOA in the CLI), which fits the emulation up to n = 51 while the master fits
 up to n = 26. The sampler contract (bitstrings of the free spins) is enforced: `collect` rejects
@@ -279,9 +281,9 @@ LB = min(UB, lowest open key) rounded up to the lattice (A(e) with (iv)), and th
 The loop of A.2 with: propagation B.4 and bound B.3 (numba), leaves with E exact in int64, the
 node Hamiltonian of B.2 sampled at every node (for odd n the master also through its skew
 restriction, B.12), the class roots of B.5 as the children of the master, and eq. 9 over the
-outermost free spins with nu from the node's samples (B.6). A node Hamiltonian with more qubits than
-the device takes returns no samples (QCBB rule), so that node uses nu = 1 and offers no
-incumbent. Result: proven optimum when the queue is exhausted at T, else UB, the certified LB
+outermost free spins with nu from the node's samples (B.6). Only the master may have more qubits
+than the device takes; it is then branched into the class roots without samples, and any other
+node that does not fit raises `SizeError`. Result: proven optimum when the queue is exhausted at T, else UB, the certified LB
 and the gap; the trace and the primal-dual integral of A.2 are part of the result.
 
 ### B.11 Component table
@@ -291,7 +293,7 @@ and the gap; the trace and the primal-dual integral of A.2 are part of the resul
 | MP: BLP with Ax = b | unconstrained quartic polynomial | linearization needs ~1.5 n^2 binaries, big M ~ n^3/3, GW gap >> E* |
 | MH: 2-local Ising, big M | H = sum_k C_k^2, 4-local, n qubits, no M | exact and penalty-free; LABS is the penalty form of C_k = 0 |
 | Constraints for V, nu, P | lag budgets C_k^2 <= beta_k, beta_k = T - LB_{-k} | the only constraints implied by "improve UB"; they feed eqs. 5-8, propagation, App. C |
-| 3.1 VQA, samples | fixed-angle QAOA (transferred angles, no variational loop) behind the Sampler interface, or SA behind the same interface, one backend per run; every node sampled once; a Hamiltonian above the device size is not sampled; same H_node | N1; optimizing angles per node would cost more than the node; reads bits, exact E, V, nu |
+| 3.1 VQA, samples | fixed-angle QAOA (transferred angles, no variational loop) behind the Sampler interface, or SA behind the same interface, one backend per run; every node sampled once; only the master may exceed the device size, and it is then branched without samples; same H_node | N1; optimizing angles per node would cost more than the node; reads bits, exact E, V, nu |
 | 3.2.1-3.2.2 conflict values, argmax | eqs. 5-9 with the analog P of eq. 7; candidate set the two outermost free spins (default) or all free spins | the branching order of Mertens and Packebusch-Mertens, from both ends inward (Proposition 5); the samples decide between the two outermost spins |
 | 3.2.3 subproblem (10)-(16) | substitution of fixed spins into the polynomial; constant tracked | polynomial instead of linear rows |
 | 3.2.4 propagation | budget propagation with exact ranges R_k (Theorem 3) | DPLL-like forcing on C_k^2 <= beta_k |
@@ -336,8 +338,8 @@ N1 (quantum sampler in place, load-bearing, swappable, math written for the quan
   UB is the reported answer and sets the gap. Verdict: MET, with honest limits. Leaves also lower
   UB, and once UB = E* the samples change the search tree only through the choice between the two
   outermost free spins (Proposition 6, PROVEN); the certificate is classical by construction
-  (Theorem A); the sampler is fixed-angle QAOA on the exact emulation (B.7, 4.6, 4.8; a
-  Hamiltonian above 26 qubits is not sampled), and hardware runs are demonstrations only.
+  (Theorem A); the sampler is fixed-angle QAOA on the exact emulation (B.7, 4.6, 4.8; only the
+  master may exceed 26 qubits, and it is then branched without samples), and hardware runs are demonstrations only.
 N2 (branching by conflict values from wisely chosen constraints, eqs. 5-9 spirit).
   Constraints: dynamic lag budgets. V, nu, gamma, argmax as eqs. 5-9 and P as the analog of
   eq. 7 for a polynomial constraint (B.6), over the two outermost free spins (default) or all free
@@ -590,8 +592,8 @@ outermost free spins tie for every nu, so the samples do not change that choice.
 ### 4.1 Qubits
 Every node that is not pruned and is not a leaf is sampled: the master on n qubits
 (labs002-labs100: 2-100; skew option B.12, odd n: q = (n+1)/2), the class roots on
-F = n - 2 m0 qubits (default m0 = 7: n - 14), and every node below a root on fewer. A Hamiltonian
-above the device size is not sampled (B.7). MEASURED (4.8, exact emulation, max_size = 26): the
+F = n - 2 m0 qubits (default m0 = 7: n - 14), and every node below a root on fewer. Only the master
+may exceed the device size; it is then branched without samples (B.7). MEASURED (4.8, exact emulation, max_size = 26): the
 largest sampled F of a run is n for n <= 26, (n + 1) / 2 for odd n = 27, 29 (skew restriction)
 and n - 14 for even n = 28, 30, where the master returns no samples.
 
@@ -630,8 +632,8 @@ calls per proof n = 20: 130; 22: 730; 24: 2,598; 26: 3,392; 28: 76,237; 29: 256,
 30: 110,868. Device time per shot, overhead included, is 0.03-1 s (QOBLIB LABS submissions, AQT
 and IBM), so 1,000 shots take 0.5-15 min per call (ESTIMATE). At these rates the n = 20 proof
 (130 calls) would take 1-33 h of device time and the n = 28 proof (76,237 calls) 26 days to
-2.2 years (ESTIMATE). On hardware only the Hamiltonians within the device's `max_size` are
-sampled; the others return empty sample sets (B.7). Batching: `qaoa/device.py` packs the
+2.2 years (ESTIMATE). On hardware every node below the master must fit the device's `max_size`;
+a larger one raises `SizeError` (B.7). Batching: `qaoa/device.py` packs the
 programs of one sampler call on disjoint qubits up to a share of the device's qubits (4.7); the
 node loop passes one Hamiltonian per call, so packing does not reduce the number of jobs of a
 run.
@@ -742,8 +744,8 @@ own emulator (H2-1E). None of this affects the proof (Proposition 6).
 Setting (`paper/figures/data/scripts/bnb_study.py`, run by `run_bnb.sh`; Apple M4 Pro, one
 process; package defaults: m0 = 7, reversal rule, candidates "outermost", propagation; 1,000 shots
 per node; seed 1; at most one hour per run). QAOA: fixed angles at p = 12 and at p = 1 with the
-angle scale of 4.6, on the exact noiseless emulation with max_size = 26 qubits; a
-Hamiltonian above 26 qubits is not sampled (B.7), so for even n >= 28 the master returns no
+angle scale of 4.6, on the exact noiseless emulation with max_size = 26 qubits; the
+master above 26 qubits is branched without samples (B.7), so for even n >= 28 the master gets no
 samples and the first incumbent comes from the first class root, and for odd n the master is
 sampled through its skew restriction (B.12). SA: 1,000 sweeps per shot, every Hamiltonian sampled.
 Both backends ran the same seed; the trace, the sampler calls, the time split and the PDI are

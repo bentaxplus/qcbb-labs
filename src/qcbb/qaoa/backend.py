@@ -17,7 +17,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from qcbb.problem import Hamiltonian, Monomial, Spins
-from qcbb.sampler import SampleSet, collect
+from qcbb.sampler import SampleSet, SizeError, collect
 
 Floats = NDArray[np.float64]
 
@@ -104,11 +104,6 @@ class Backend(Protocol):
 class QaoaSampler:
     """Sample node Hamiltonians with fixed-angle QAOA on a backend.
 
-    A Hamiltonian larger than the backend takes is not sampled: its sample set
-    is empty, so the node offers no incumbent candidate and its conflict
-    values use nu = 1 (the QCBB rule for a node the quantum solver cannot
-    take).
-
     Args:
         angles: The angle schedule of the Hamiltonians.
         backend: Executes the circuits; the exact noiseless emulation if None.
@@ -136,15 +131,16 @@ class QaoaSampler:
             seed: Seed for reproducible runs.
 
         Returns:
-            One sample set per Hamiltonian, with exact energies; empty for a
-            Hamiltonian with more than `backend.max_size` qubits.
+            One sample set per Hamiltonian, with exact energies.
+
+        Raises:
+            SizeError: If a Hamiltonian has more than `backend.max_size` qubits.
         """
-        fitting = [h for h in problems if h.size <= self.backend.max_size]
-        jobs = [QaoaJob.of(h, *self.angles(h)) for h in fitting]
-        spins = iter(self.backend.run(jobs, shots, seed) if jobs else [])
-        return [
-            collect(h, next(spins))
-            if h.size <= self.backend.max_size
-            else collect(h, np.empty((0, h.size), dtype=np.int8))
-            for h in problems
-        ]
+        for h in problems:
+            if h.size > self.backend.max_size:
+                raise SizeError(
+                    f"{h.size} qubits; the backend takes {self.backend.max_size}"
+                )
+        jobs = [QaoaJob.of(h, *self.angles(h)) for h in problems]
+        spins = self.backend.run(jobs, shots, seed) if jobs else []
+        return [collect(h, s) for h, s in zip(problems, spins, strict=True)]

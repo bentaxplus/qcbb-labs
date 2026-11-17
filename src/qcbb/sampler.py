@@ -17,6 +17,10 @@ import numpy as np
 from qcbb.problem import Hamiltonian, Ints, Spins
 
 
+class SizeError(ValueError):
+    """A Hamiltonian has more free variables than the sampler takes."""
+
+
 @dataclass(frozen=True, eq=False)
 class SampleSet:
     """Distinct samples of one node Hamiltonian.
@@ -79,5 +83,8 @@ class Sampler(Protocol):
 
         Returns:
             One sample set per Hamiltonian, in the same order.
+
+        Raises:
+            SizeError: If a Hamiltonian is larger than the sampler takes.
         """
         ...

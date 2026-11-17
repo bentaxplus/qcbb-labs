@@ -18,7 +18,7 @@ from qcbb.node_loop import (
     solve,
 )
 from qcbb.problem import Hamiltonian, Problem
-from qcbb.sampler import Sampler, SampleSet, collect
+from qcbb.sampler import Sampler, SampleSet, SizeError, collect
 
 __version__ = "0.1.0"
 
@@ -33,6 +33,7 @@ __all__ = [
     "Settings",
     "branching_variable",
     "certified_lower_bound",
+    "SizeError",
     "collect",
     "conflict_values",
     "primal_dual_integral",
