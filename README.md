@@ -71,8 +71,8 @@ Main options of `qcbb labs solve n`:
 | `--seed` | random seed; the same seed gives the same search tree | none |
 
 Run `.venv/bin/qcbb labs solve --help` for all options. The QAOA sampler computes the QAOA state
-exactly and handles up to 26 qubits; a node with more free spins is not sampled, which does not
-affect correctness.
+exactly and handles up to 26 qubits. Only the root node (the full problem) may be larger; it is
+then split into its symmetry classes without being sampled, and every other node is sampled.
 
 The QOBLIB submission runs (labs002 to labs030, five seeds each) use:
 
@@ -91,9 +91,9 @@ backend = Emulator()
 sampler = SkewSampler(QaoaSampler(LabsAngleSchedule(p=12), backend), backend.max_size)
 result = solve(LabsProblem(21), sampler, Settings(shots=1000, seed=1))
 
-print(result.ub, result.lb, result.proven)   # best energy, lower bound, proof
-print(result.incumbent)                       # the best sequence
-for record in result.trace:                   # the bounds over time
+print(result.ub, result.lb, result.proven)  # best energy, lower bound, proof
+print(result.incumbent)  # the best sequence
+for record in result.trace:  # the bounds over time
     print(record.seconds, record.ub, record.lb)
 ```
 
@@ -118,4 +118,5 @@ binary linear programs is at https://github.com/david-sipos/qcbb.
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Copyright (c) 2026 Bentax Plus.
+Copyright (c) 2026 Bentax Plus. All rights reserved; the code is available on reasonable request
+for academic, non-commercial use. See [LICENSE](LICENSE).
